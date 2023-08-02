@@ -1,0 +1,130 @@
+alias: Occupied Room - Master Bedroom - Set/ unSet
+description: This will decide if the room has someone in it or not
+trigger:
+  - platform: state
+    entity_id:
+      - media_player.panasonic_wall_tv
+    to: "off"
+    id: COUNT
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.occupied_room_master_bedroom_timer
+    id: RESET
+  - platform: state
+    entity_id:
+      - light.upstairs_hallway_light
+      - light.kitchen_light
+      - light.living_room
+    from: "off"
+    to: "on"
+    id: COUNT
+    alias: When Lights are turned On
+  - platform: state
+    entity_id:
+      - binary_sensor.m005_occupancy
+      - binary_sensor.m003_occupancy
+    from: "off"
+    to: "on"
+    id: COUNT
+    alias: When Motion is Detected
+  - platform: state
+    entity_id:
+      - device_tracker.nothing_phone_tracker
+    from: home
+    to: not_home
+    id: COUNT
+  - platform: state
+    entity_id:
+      - binary_sensor.ds0001_contact
+    from: "off"
+    to: "on"
+    id: COUNT
+condition:
+  - condition: state
+    entity_id: input_boolean.automations_all
+    state: "on"
+action:
+  - if:
+      - condition: trigger
+        id: COUNT
+      - condition: state
+        entity_id: timer.occupied_room_master_bedroom_timer
+        state: idle
+    then:
+      - service: timer.start
+        data: {}
+        target:
+          entity_id: timer.occupied_room_master_bedroom_timer
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: RESET
+        sequence:
+          - service: counter.reset
+            data: {}
+            target:
+              entity_id: counter.occupied_room_master_bedroom_counter
+      - conditions:
+          - condition: trigger
+            id: COUNT
+          - condition: time
+            after: "22:00:00"
+            before: "11:00:00"
+            enabled: true
+          - condition: state
+            entity_id: person.paul
+            state: home
+            for:
+              hours: 1
+              minutes: 0
+              seconds: 0
+        sequence:
+          - service: counter.increment
+            data: {}
+            target:
+              entity_id: counter.occupied_room_master_bedroom_counter
+  - condition: template
+    value_template: |-
+      {{
+        (as_timestamp(now()) - as_timestamp(states.binary_sensor.m005_occupancy.last_changed)) | int(1) / 60 <=15
+      }}
+    alias: Movement in the Last 15 Minutes Master Bedroom
+  - if:
+      - condition: state
+        entity_id: input_boolean.occupied_room_master_bedroom
+        state: "off"
+        for:
+          hours: 1
+          minutes: 0
+          seconds: 0
+      - condition: numeric_state
+        entity_id: counter.occupied_room_master_bedroom_counter
+        above: 4
+      - condition: state
+        entity_id: input_boolean.motion_can_turn_on_lights
+        state: "on"
+    then:
+      - service: input_boolean.turn_on
+        data: {}
+        target:
+          entity_id: input_boolean.occupied_room_master_bedroom
+    alias: Setting Room to Occupied
+  - if:
+      - condition: state
+        entity_id: input_boolean.occupied_room_master_bedroom
+        state: "on"
+        for:
+          hours: 1
+          minutes: 0
+          seconds: 0
+      - condition: numeric_state
+        entity_id: counter.occupied_room_master_bedroom_counter
+        above: 3
+    then:
+      - service: input_boolean.turn_off
+        data: {}
+        target:
+          entity_id: input_boolean.occupied_room_master_bedroom
+    alias: Setting Room to unOccupied
+mode: single
